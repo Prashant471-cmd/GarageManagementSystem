@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { Email, Lock, Visibility, VisibilityOff } from '@mui/icons-material';
 
-export function Login() {
+interface LoginProps {
+  onLoginSuccess?: () => void;
+}
+
+export function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -10,6 +14,9 @@ export function Login() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Login attempt:', { email, password, rememberMe });
+    if (onLoginSuccess) {
+      onLoginSuccess();
+    }
   };
 
   return (

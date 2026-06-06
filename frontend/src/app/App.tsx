@@ -32,7 +32,7 @@ export default function App() {
       case 'locations':
         return <Locations />;
       case 'login':
-        return <Login />;
+        return <Login onLoginSuccess={() => setActiveTab('dashboard')} />;
       default:
         return <Dashboard />;
     }

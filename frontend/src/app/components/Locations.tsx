@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { Warehouse, Store, LocationCity, Add } from '@mui/icons-material';
+import { itemsAPI } from '../../services/api';
 
 interface Location {
   id: string;
@@ -11,6 +13,34 @@ interface Location {
 }
 
 export function Locations() {
+  const [items, setItems] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const data = await itemsAPI.getAll();
+        setItems(data || []);
+      } catch (err) {
+        console.error('Failed to fetch items for locations:', err);
+      }
+    };
+    fetchItems();
+  }, []);
+
+  const getLocCount = (locName: string, locType: string) => {
+    return items
+      .filter(item => {
+        const itemLoc = (item.location || '').toLowerCase();
+        const nameLower = locName.toLowerCase();
+        const typeLower = locType.toLowerCase();
+        return itemLoc === nameLower ||
+               itemLoc === typeLower ||
+               (nameLower.includes('retail') && itemLoc.includes('retail')) ||
+               (nameLower.includes('storage') && itemLoc.includes('storage'));
+      })
+      .reduce((sum, item) => sum + (item.quantity || 0), 0);
+  };
+
   const locations: Location[] = [
     {
       id: '1',
@@ -18,7 +48,7 @@ export function Locations() {
       type: 'Warehouse',
       address: '123 Industrial Blvd, City, ST 12345',
       capacity: 1000,
-      itemCount: 487,
+      itemCount: getLocCount('Warehouse A', 'Warehouse'),
       manager: 'John Smith',
     },
     {
@@ -27,7 +57,7 @@ export function Locations() {
       type: 'Warehouse',
       address: '456 Storage Ave, City, ST 12345',
       capacity: 800,
-      itemCount: 342,
+      itemCount: getLocCount('Warehouse B', 'Warehouse'),
       manager: 'Sarah Johnson',
     },
     {
@@ -36,7 +66,7 @@ export function Locations() {
       type: 'Retail',
       address: '789 Main St, City, ST 12345',
       capacity: 500,
-      itemCount: 218,
+      itemCount: getLocCount('Main Retail Store', 'Retail'),
       manager: 'Mike Davis',
     },
     {
@@ -45,7 +75,7 @@ export function Locations() {
       type: 'Retail',
       address: '321 Downtown Rd, City, ST 12345',
       capacity: 300,
-      itemCount: 156,
+      itemCount: getLocCount('Downtown Store', 'Retail'),
       manager: 'Emily Brown',
     },
     {
@@ -54,7 +84,7 @@ export function Locations() {
       type: 'Storage',
       address: '555 Depot Ln, City, ST 12345',
       capacity: 600,
-      itemCount: 44,
+      itemCount: getLocCount('Overflow Storage', 'Storage'),
       manager: 'Tom Wilson',
     },
   ];

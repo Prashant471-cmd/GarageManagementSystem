@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowBack, Save, Delete } from '@mui/icons-material';
+import { itemsAPI, categoriesAPI } from '../../services/api';
 
 interface ItemDetailProps {
   itemId?: string;
@@ -8,17 +9,77 @@ interface ItemDetailProps {
 
 export function ItemDetail({ itemId, onBack }: ItemDetailProps) {
   const [formData, setFormData] = useState({
-    name: 'MacBook Pro 16"',
-    sku: 'SKU-1001',
+    name: '',
+    sku: '',
     category: 'Electronics',
     location: 'Warehouse A',
-    quantity: '24',
+    quantity: '0',
     minQuantity: '10',
-    value: '2499',
-    description: 'High-performance laptop with M3 Pro chip, 16GB RAM, 512GB SSD',
-    supplier: 'Apple Inc.',
-    lastRestocked: '2026-05-15',
+    value: '0',
+    description: '',
+    supplier: '',
+    lastRestocked: '',
   });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>(['Electronics', 'Furniture', 'Tools', 'Supplies', 'Equipment']);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        // Load categories
+        try {
+          const cats = await categoriesAPI.getAll();
+          if (cats && cats.length > 0) {
+            setCategories(cats.map(c => c.name));
+          }
+        } catch (catErr) {
+          console.warn('Failed to load categories, using defaults:', catErr);
+        }
+
+        // Load item if editing
+        if (itemId && itemId !== 'new') {
+          const item = await itemsAPI.getById(Number(itemId));
+          setFormData({
+            name: item.name || '',
+            sku: item.sku || '',
+            category: item.category || 'Electronics',
+            location: item.location || 'Warehouse A',
+            quantity: String(item.quantity || 0),
+            minQuantity: String(item.minQuantity !== undefined && item.minQuantity !== null ? item.minQuantity : 10),
+            value: String(item.value || item.price || 0),
+            description: item.description || '',
+            supplier: item.supplier || '',
+            lastRestocked: item.lastRestocked || '',
+          });
+        } else {
+          // Initialize defaults for new item
+          setFormData({
+            name: '',
+            sku: 'SKU-' + Math.floor(1000 + Math.random() * 9000),
+            category: 'Electronics',
+            location: 'Warehouse A',
+            quantity: '0',
+            minQuantity: '10',
+            value: '0',
+            description: '',
+            supplier: '',
+            lastRestocked: new Date().toISOString().split('T')[0],
+          });
+        }
+        setError(null);
+      } catch (err: any) {
+        console.error(err);
+        setError('Failed to fetch item details.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [itemId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({
@@ -27,10 +88,52 @@ export function ItemDetail({ itemId, onBack }: ItemDetailProps) {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Saving item:', formData);
+    try {
+      const payload = {
+        name: formData.name,
+        sku: formData.sku,
+        category: formData.category,
+        location: formData.location,
+        quantity: Number(formData.quantity) || 0,
+        minQuantity: Number(formData.minQuantity) || 0,
+        price: Number(formData.value) || 0,
+        value: Number(formData.value) || 0,
+        description: formData.description,
+        supplier: formData.supplier,
+        lastRestocked: formData.lastRestocked,
+      };
+
+      if (itemId && itemId !== 'new') {
+        await itemsAPI.update(Number(itemId), payload);
+      } else {
+        await itemsAPI.create(payload);
+      }
+      onBack();
+    } catch (err: any) {
+      alert('Failed to save item: ' + err.message);
+    }
   };
+
+  const handleDelete = async () => {
+    if (itemId && itemId !== 'new' && window.confirm('Are you sure you want to delete this item?')) {
+      try {
+        await itemsAPI.delete(Number(itemId));
+        onBack();
+      } catch (err: any) {
+        alert('Failed to delete item: ' + err.message);
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 bg-slate-950 min-h-screen text-white flex items-center justify-center">
+        Loading details...
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-slate-950 min-h-screen">
@@ -43,12 +146,18 @@ export function ItemDetail({ itemId, onBack }: ItemDetailProps) {
           Back to Items
         </button>
         <h2 className="text-3xl mb-1 text-white">
-          {itemId ? 'Edit Item' : 'New Item'}
+          {itemId && itemId !== 'new' ? 'Edit Item' : 'New Item'}
         </h2>
         <p className="text-slate-400">
-          {itemId ? 'Update item details and inventory information' : 'Add a new item to your inventory'}
+          {itemId && itemId !== 'new' ? 'Update item details and inventory information' : 'Add a new item to your inventory'}
         </p>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-rose-500/20 text-rose-400 rounded-lg border border-rose-800">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
@@ -95,11 +204,9 @@ export function ItemDetail({ itemId, onBack }: ItemDetailProps) {
                     onChange={handleChange}
                     className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="Electronics">Electronics</option>
-                    <option value="Furniture">Furniture</option>
-                    <option value="Tools">Tools</option>
-                    <option value="Supplies">Supplies</option>
-                    <option value="Equipment">Equipment</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -220,9 +327,10 @@ export function ItemDetail({ itemId, onBack }: ItemDetailProps) {
                 >
                   Cancel
                 </button>
-                {itemId && (
+                {itemId && itemId !== 'new' && (
                   <button
                     type="button"
+                    onClick={handleDelete}
                     className="flex items-center gap-2 px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors ml-auto"
                   >
                     <Delete fontSize="small" />
@@ -241,17 +349,17 @@ export function ItemDetail({ itemId, onBack }: ItemDetailProps) {
               <div>
                 <div className="text-sm text-slate-400">Total Value</div>
                 <div className="text-2xl text-white">
-                  ${(parseInt(formData.quantity) * parseInt(formData.value)).toLocaleString()}
+                  ${((Number(formData.quantity) || 0) * (Number(formData.value) || 0)).toLocaleString()}
                 </div>
               </div>
               <div>
                 <div className="text-sm text-slate-400">Status</div>
                 <div className="mt-1">
-                  {parseInt(formData.quantity) > parseInt(formData.minQuantity) ? (
+                  {(Number(formData.quantity) || 0) > (Number(formData.minQuantity) || 10) ? (
                     <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium">
                       In Stock
                     </span>
-                  ) : parseInt(formData.quantity) > 0 ? (
+                  ) : (Number(formData.quantity) || 0) > 0 ? (
                     <span className="px-3 py-1 bg-amber-500/20 text-amber-400 rounded-full text-xs font-medium">
                       Low Stock
                     </span>
@@ -268,17 +376,15 @@ export function ItemDetail({ itemId, onBack }: ItemDetailProps) {
           <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-6">
             <h3 className="text-lg font-medium text-white mb-4">Recent History</h3>
             <div className="space-y-3">
+              {formData.lastRestocked && (
+                <div className="text-sm">
+                  <div className="text-slate-400">{formData.lastRestocked}</div>
+                  <div className="text-white">Restocked/Updated to {formData.quantity} units</div>
+                </div>
+              )}
               <div className="text-sm">
-                <div className="text-slate-400">May 15, 2026</div>
-                <div className="text-white">Restocked +50 units</div>
-              </div>
-              <div className="text-sm">
-                <div className="text-slate-400">May 10, 2026</div>
-                <div className="text-white">Updated price to $2,499</div>
-              </div>
-              <div className="text-sm">
-                <div className="text-slate-400">May 5, 2026</div>
-                <div className="text-white">Moved to Warehouse A</div>
+                <div className="text-slate-400">Initial Setup</div>
+                <div className="text-white">Item added to inventory</div>
               </div>
             </div>
           </div>

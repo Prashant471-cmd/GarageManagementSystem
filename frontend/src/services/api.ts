@@ -5,8 +5,15 @@ export interface Item {
   id: number;
   name: string;
   description?: string;
-  price: number;
+  sku?: string;
+  category?: string;
+  location?: string;
   quantity: number;
+  minQuantity?: number;
+  price: number;
+  value?: number;
+  supplier?: string;
+  lastRestocked?: string;
   category_id?: number;
   created_at?: string;
   updated_at?: string;

@@ -1,12 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import items, categories, users
-from db import create_tables
-# ensure ORM models are imported so their tables are registered
-import orm_models  # noqa: F401
-
-# create tables at import time to avoid missing-table errors when using uvicorn
-create_tables()
 
 app = FastAPI(
     title="Inventory System",
@@ -15,14 +9,10 @@ app = FastAPI(
 )
 
 
-@app.on_event("startup")
-def on_startup():
-    create_tables()
-
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,6 +32,4 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
-    # create DB tables if they don't exist, then run
-    create_tables()
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

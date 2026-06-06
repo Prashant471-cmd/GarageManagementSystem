@@ -1,16 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Add, Edit, Delete, FilterList } from '@mui/icons-material';
-
-interface Item {
-  id: string;
-  name: string;
-  sku: string;
-  category: string;
-  location: string;
-  quantity: number;
-  value: number;
-  status: 'In Stock' | 'Low Stock' | 'Out of Stock';
-}
+import { itemsAPI } from '../../services/api';
 
 interface ItemsProps {
   onViewItem?: (itemId: string) => void;
@@ -19,24 +9,57 @@ interface ItemsProps {
 export function Items({ onViewItem }: ItemsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const items: Item[] = [
-    { id: '1', name: 'MacBook Pro 16"', sku: 'SKU-1001', category: 'Electronics', location: 'Warehouse A', quantity: 24, value: 2499, status: 'In Stock' },
-    { id: '2', name: 'Office Chair Pro', sku: 'SKU-1002', category: 'Furniture', location: 'Warehouse B', quantity: 15, value: 299, status: 'In Stock' },
-    { id: '3', name: 'Wireless Mouse', sku: 'SKU-1003', category: 'Electronics', location: 'Retail Store', quantity: 8, value: 49, status: 'Low Stock' },
-    { id: '4', name: 'Desk Lamp LED', sku: 'SKU-1004', category: 'Furniture', location: 'Warehouse A', quantity: 45, value: 79, status: 'In Stock' },
-    { id: '5', name: 'USB-C Cable', sku: 'SKU-1005', category: 'Electronics', location: 'Warehouse B', quantity: 0, value: 15, status: 'Out of Stock' },
-    { id: '6', name: 'Standing Desk', sku: 'SKU-1006', category: 'Furniture', location: 'Warehouse A', quantity: 12, value: 599, status: 'In Stock' },
-    { id: '7', name: 'Mechanical Keyboard', sku: 'SKU-1007', category: 'Electronics', location: 'Retail Store', quantity: 18, value: 159, status: 'In Stock' },
-    { id: '8', name: 'Monitor 27" 4K', sku: 'SKU-1008', category: 'Electronics', location: 'Warehouse B', quantity: 6, value: 449, status: 'Low Stock' },
-  ];
+  const fetchItems = async () => {
+    try {
+      setLoading(true);
+      const data = await itemsAPI.getAll();
+      setItems(data || []);
+      setError(null);
+    } catch (err: any) {
+      console.error(err);
+      setError('Failed to load items. Make sure backend is running.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const categories = ['all', 'Electronics', 'Furniture', 'Tools', 'Supplies', 'Equipment'];
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    if (window.confirm('Are you sure you want to delete this item?')) {
+      try {
+        await itemsAPI.delete(id);
+        fetchItems();
+      } catch (err: any) {
+        alert('Failed to delete item: ' + err.message);
+      }
+    }
+  };
+
+  // Dynamically extract unique categories present in the items, plus default categories
+  const categories = ['all', ...Array.from(new Set(items.map(item => item.category).filter(Boolean)))];
+
+  const getItemStatus = (item: any) => {
+    const qty = item.quantity || 0;
+    const minQty = item.minQuantity !== undefined && item.minQuantity !== null ? Number(item.minQuantity) : 10;
+    if (qty <= 0) return 'Out of Stock';
+    if (qty <= minQty) return 'Low Stock';
+    return 'In Stock';
+  };
 
   const filteredItems = items.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.sku.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+    const name = item.name || '';
+    const sku = item.sku || '';
+    const category = item.category || '';
+    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         sku.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -85,64 +108,81 @@ export function Items({ onViewItem }: ItemsProps) {
                 </select>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+            <button
+              onClick={() => onViewItem?.('new')}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
               <Add fontSize="small" />
               Add Item
             </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-800">
-                <th className="text-left p-4 text-slate-400 font-medium text-sm">SKU</th>
-                <th className="text-left p-4 text-slate-400 font-medium text-sm">Name</th>
-                <th className="text-left p-4 text-slate-400 font-medium text-sm">Category</th>
-                <th className="text-left p-4 text-slate-400 font-medium text-sm">Location</th>
-                <th className="text-left p-4 text-slate-400 font-medium text-sm">Quantity</th>
-                <th className="text-left p-4 text-slate-400 font-medium text-sm">Value</th>
-                <th className="text-left p-4 text-slate-400 font-medium text-sm">Status</th>
-                <th className="text-left p-4 text-slate-400 font-medium text-sm">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item) => (
-                <tr key={item.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
-                  <td className="p-4 text-slate-300 font-mono text-sm">{item.sku}</td>
-                  <td className="p-4 text-white font-medium">{item.name}</td>
-                  <td className="p-4 text-slate-300">{item.category}</td>
-                  <td className="p-4 text-slate-300">{item.location}</td>
-                  <td className="p-4 text-white">{item.quantity}</td>
-                  <td className="p-4 text-white">${item.value}</td>
-                  <td className="p-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => onViewItem?.(item.id)}
-                        className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-blue-400"
-                      >
-                        <Edit fontSize="small" />
-                      </button>
-                      <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-rose-400">
-                        <Delete fontSize="small" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <div className="p-12 text-center text-slate-400">Loading items...</div>
+        ) : error ? (
+          <div className="p-12 text-center text-rose-400">{error}</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-800">
+                    <th className="text-left p-4 text-slate-400 font-medium text-sm">SKU</th>
+                    <th className="text-left p-4 text-slate-400 font-medium text-sm">Name</th>
+                    <th className="text-left p-4 text-slate-400 font-medium text-sm">Category</th>
+                    <th className="text-left p-4 text-slate-400 font-medium text-sm">Location</th>
+                    <th className="text-left p-4 text-slate-400 font-medium text-sm">Quantity</th>
+                    <th className="text-left p-4 text-slate-400 font-medium text-sm">Value</th>
+                    <th className="text-left p-4 text-slate-400 font-medium text-sm">Status</th>
+                    <th className="text-left p-4 text-slate-400 font-medium text-sm">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.map((item) => {
+                    const status = getItemStatus(item);
+                    return (
+                      <tr key={item.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
+                        <td className="p-4 text-slate-300 font-mono text-sm">{item.sku || 'N/A'}</td>
+                        <td className="p-4 text-white font-medium">{item.name}</td>
+                        <td className="p-4 text-slate-300">{item.category || 'N/A'}</td>
+                        <td className="p-4 text-slate-300">{item.location || 'N/A'}</td>
+                        <td className="p-4 text-white">{item.quantity}</td>
+                        <td className="p-4 text-white">${(item.value || item.price || 0).toLocaleString()}</td>
+                        <td className="p-4">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                            {status}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => onViewItem?.(item.id.toString())}
+                              className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-blue-400"
+                            >
+                              <Edit fontSize="small" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-rose-400"
+                            >
+                              <Delete fontSize="small" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-        {filteredItems.length === 0 && (
-          <div className="p-12 text-center text-slate-500">
-            No items found matching your criteria
-          </div>
+            {filteredItems.length === 0 && (
+              <div className="p-12 text-center text-slate-500">
+                No items found matching your criteria
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
